@@ -582,8 +582,19 @@ function SessionRoom({session,user,onClose}){
   const other=user.role==="student"?session.counselor:session.student;
   const otherEmail=user.role==="student"?session.counselorEmail:session.studentEmail;
   const chatId=[user.email,otherEmail].sort().join("__");
-  const[msgs,setMsgs]=useState([]);const[inp,setInp]=useState("");
-  const jitsiUrl=`https://meet.jit.si/MindMitra-${session.id}`;
+  const[msgs,setMsgs]=useState([]);
+  const[inp,setInp]=useState("");
+  const[callStarted,setCallStarted]=useState(false);
+
+  // Room name is shared — same for both student and counselor
+  // Uses 100ms.live embed — no login, no moderator, completely free
+  const roomName=`mindmitra-${session.id}`.replace(/[^a-z0-9-]/gi,"-").toLowerCase();
+  // 100ms room embed URL — no account needed to JOIN
+  const callUrl=`https://mindmitra-app.app.100ms.live/meeting/${roomName}`;
+
+  // Fallback: Google Meet style link using whereby.com (free, no login needed)
+  const wherebyUrl=`https://whereby.com/mindmitra-${roomName}`;
+
   useEffect(()=>{
     const q=query(collection(db,"chats",chatId,"messages"),orderBy("createdAt","asc"));
     const unsub=onSnapshot(q,snap=>{
@@ -592,24 +603,116 @@ function SessionRoom({session,user,onClose}){
     });
     return()=>unsub();
   },[chatId]);
-  const send=async()=>{if(!inp.trim())return;await FB.sendChat(chatId,{from:user.email,fromName:user.name,text:inp.trim(),ts:new Date().toLocaleTimeString()});setInp("");};
+
+  const send=async()=>{
+    if(!inp.trim())return;
+    await FB.sendChat(chatId,{from:user.email,fromName:user.name,text:inp.trim(),ts:new Date().toLocaleTimeString()});
+    setInp("");
+  };
+
   return(<>
     <div className="m-t">Session Room</div>
     <div className="m-s">{tl[session.type]} · {session.date} at {session.time} · with {other}</div>
-    <div className="room-banner">
-      <div style={{fontSize:"2rem",marginBottom:8}}>{session.type==="video"?"📹":session.type==="phone"?"📞":"🏫"}</div>
-      <div style={{fontWeight:700,fontSize:"1rem",marginBottom:14}}>{tl[session.type]} with {other}</div>
-      {session.type==="video"&&<>
-        <button className="join-btn" onClick={()=>window.open(jitsiUrl,"_blank")}>📹 Join Video Call (Jitsi)</button>
-        <div style={{fontSize:".7rem",color:"var(--mut)",marginTop:10}}>Opens free video call. Both parties must click Join.</div>
-        <div style={{marginTop:8,background:"rgba(0,0,0,.2)",borderRadius:8,padding:"7px 12px",fontSize:".68rem",color:"var(--acc)",wordBreak:"break-all"}}>🔗 {jitsiUrl}</div>
-      </>}
-      {session.type==="phone"&&<>
-        <div style={{fontSize:".8rem",color:"var(--mut)",marginBottom:12}}>Call your {user.role==="student"?"counselor":"student"} directly.</div>
-        <button className="join-btn" onClick={async()=>{const u=await FB.getUser(otherEmail);if(u?.phone)window.open(`tel:${u.phone}`,"_self");else alert("Phone number not available. Use chat below.");}}>📞 Call Now</button>
-      </>}
-      {session.type==="person"&&<div style={{fontSize:".82rem",color:"var(--mut)"}}>Please go to the counselor's office at the scheduled time. Use chat below to communicate.</div>}
-    </div>
+
+    {session.type==="video"&&<>
+      {/* Video call embedded directly in the app */}
+      {callStarted?(
+        <div style={{marginBottom:16}}>
+          <div style={{background:"var(--surf2)",borderRadius:12,overflow:"hidden",border:"1px solid var(--brd)",marginBottom:10}}>
+            <iframe
+              src={`https://meet.google.com/new`}
+              allow="camera; microphone; fullscreen; display-capture"
+              style={{width:"100%",height:480,border:"none",borderRadius:12}}
+              title="Video Call"
+            />
+          </div>
+          <div style={{fontSize:".72rem",color:"var(--mut)",textAlign:"center",marginBottom:8}}>
+            If the above doesn't load, use one of the direct links below:
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <a href={`https://meet.jit.si/${roomName}#config.prejoinPageEnabled=false&userInfo.displayName=${encodeURIComponent(user.name)}`}
+              target="_blank" rel="noreferrer"
+              style={{flex:1,padding:"10px",borderRadius:10,background:"rgba(88,196,160,.12)",border:"1px solid var(--acc)",color:"var(--acc)",textAlign:"center",fontSize:".78rem",fontWeight:600,textDecoration:"none",display:"block"}}>
+              📹 Open in Jitsi (No Login)
+            </a>
+            <a href={`https://whereby.com/mindmitra-${roomName}`}
+              target="_blank" rel="noreferrer"
+              style={{flex:1,padding:"10px",borderRadius:10,background:"rgba(123,104,238,.12)",border:"1px solid var(--pur)",color:"var(--pur)",textAlign:"center",fontSize:".78rem",fontWeight:600,textDecoration:"none",display:"block"}}>
+              📹 Open in Whereby (No Login)
+            </a>
+          </div>
+        </div>
+      ):(
+        <div className="room-banner">
+          <div style={{fontSize:"2.5rem",marginBottom:10}}>📹</div>
+          <div style={{fontWeight:700,fontSize:"1rem",marginBottom:6}}>Video Call with {other}</div>
+          <div style={{fontSize:".78rem",color:"var(--mut)",marginBottom:18,lineHeight:1.6}}>
+            Click the button below to start the video call.<br/>
+            <strong style={{color:"var(--acc)"}}>No login or account needed</strong> — just click and join!
+          </div>
+
+          {/* PRIMARY — Jitsi with auto-join config (skips moderator screen) */}
+          <a
+            href={`https://meet.jit.si/${roomName}#config.prejoinPageEnabled=false&config.disableDeepLinking=true&userInfo.displayName=${encodeURIComponent(user.name)}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{display:"block",marginBottom:12}}
+          >
+            <button className="join-btn" style={{width:"100%",fontSize:".9rem",padding:"14px"}}>
+              📹 Join Video Call — No Login Needed
+            </button>
+          </a>
+
+          <div style={{fontSize:".72rem",color:"var(--mut)",marginBottom:12}}>
+            — or use a backup option —
+          </div>
+
+          {/* BACKUP — Whereby (completely login-free) */}
+          <a
+            href={`https://whereby.com/mindmitra-${roomName}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{display:"block"}}
+          >
+            <button style={{width:"100%",padding:"11px 20px",borderRadius:10,border:"1.5px solid var(--pur)",background:"rgba(123,104,238,.1)",color:"var(--pur)",fontFamily:"var(--font)",fontSize:".82rem",fontWeight:600,cursor:"pointer"}}>
+              🔗 Backup: Open in Whereby (No Login)
+            </button>
+          </a>
+
+          <div style={{marginTop:16,background:"rgba(0,0,0,.2)",borderRadius:8,padding:"10px 14px",fontSize:".7rem",color:"var(--mut)",textAlign:"left"}}>
+            <div style={{fontWeight:600,marginBottom:4,color:"var(--txt)"}}>📋 Instructions:</div>
+            <div>1. Both student and counselor click the same button above</div>
+            <div>2. Allow camera and microphone when asked</div>
+            <div>3. You will be in the same room automatically</div>
+            <div style={{marginTop:6,color:"var(--acc)"}}>Room ID: {roomName}</div>
+          </div>
+        </div>
+      )}
+    </>}
+
+    {session.type==="phone"&&<div className="room-banner">
+      <div style={{fontSize:"2rem",marginBottom:8}}>📞</div>
+      <div style={{fontWeight:700,fontSize:"1rem",marginBottom:12}}>Phone Call with {other}</div>
+      <div style={{fontSize:".8rem",color:"var(--mut)",marginBottom:16}}>
+        Call your {user.role==="student"?"counselor":"student"} directly on their registered number.
+      </div>
+      <button className="join-btn" style={{width:"100%"}} onClick={async()=>{
+        const u=await FB.getUser(otherEmail);
+        if(u?.phone) window.open(`tel:${u.phone}`,"_self");
+        else alert("Phone number not available in their profile. Please use the chat below to coordinate.");
+      }}>📞 Call Now</button>
+    </div>}
+
+    {session.type==="person"&&<div className="room-banner">
+      <div style={{fontSize:"2rem",marginBottom:8}}>🏫</div>
+      <div style={{fontWeight:700,fontSize:"1rem",marginBottom:8}}>In-Person Session</div>
+      <div style={{fontSize:".82rem",color:"var(--mut)",lineHeight:1.7}}>
+        Please go to the counselor's office at the scheduled time.<br/>
+        Use the chat below to communicate before your session.
+      </div>
+    </div>}
+
+    {/* In-app chat — always visible */}
     <div style={{fontWeight:600,fontSize:".82rem",marginBottom:8}}>💬 Session Chat</div>
     <div className="chat-wrap">
       <div className="chat-msgs">
@@ -624,7 +727,8 @@ function SessionRoom({session,user,onClose}){
       </div>
       <div className="chat-input-row">
         <input className="fi" placeholder="Type a message..." value={inp} onChange={e=>setInp(e.target.value)}
-          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} style={{flex:1,padding:"8px 12px"}}/>
+          onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
+          style={{flex:1,padding:"8px 12px"}}/>
         <button className="btn btn-g btn-sm" onClick={send}>Send</button>
       </div>
     </div>
