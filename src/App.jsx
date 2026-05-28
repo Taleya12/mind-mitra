@@ -1,10 +1,25 @@
 // src/App.jsx — Mind Mitra (Firebase Edition)
 import { useState, useEffect } from "react";
-import { db } from "./firebase";
+import { initializeApp } from "firebase/app";
 import {
-  collection, doc, setDoc, getDoc, addDoc, updateDoc,
+  getFirestore, collection, doc, setDoc, getDoc, addDoc, updateDoc,
   onSnapshot, query, where, orderBy, serverTimestamp,
 } from "firebase/firestore";
+
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+// Paste YOUR values from Firebase Console → Project Settings → Your Apps
+// ─────────────────────────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyBkIX13PxykVnVBsX7HWhcN48acp9s8O-E",
+  authDomain:        "mind-mitra-37f85.firebaseapp.com",
+  projectId:         "mind-mitra-37f85",
+  storageBucket:     "mind-mitra-37f85.firebasestorage.app",
+  messagingSenderId: "889960062685",
+  appId:             "1:889960062685:web:098fd29ff9584ff4490534",
+};
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+// ─────────────────────────────────────────────────────────────────────────────
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
